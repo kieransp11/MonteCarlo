@@ -20,32 +20,41 @@ class CMakeExtension(Extension):
 
 class CMakeBuild(build_ext):
     def run(self):
-        """ Verify CMAKE version and build each source file """
+        """ Verify CMAKE and Ninja version """
         try:
-            out = subprocess.check_output(['cmake', '--version'])
+            cmake_out = subprocess.check_output(['cmake', '--version'])
+            ninja_out = subprocess.check_output(['ninja', '--version'])
         except OSError:
             raise RuntimeError(
-                "CMake must be installed to build the following extensions: " +
-                ", ".join(e.name for e in self.extensions))
+                "CMake and Ninja must be installed to build the following "
+                "extensions: " + ", ".join(e.name for e in self.extensions))
 
         if platform.system() == "Windows":
             cmake_version = LooseVersion(re.search(r'version\s*([\d.]+)',
-                                                   out.decode()).group(1))
+                                                   cmake_out.decode()).group(1))
+            ninja_version = LooseVersion(ninja_out.decode())
             if cmake_version < '3.1.0':
                 raise RuntimeError("CMake >= 3.1.0 is required on Windows")
+
+            if ninja_version < '1.2.0':
+                raise RuntimeError("Ninja >=1.2.0 is required on Windows")
 
         for ext in self.extensions:
             self.build_extension(ext)
 
     def build_extension(self, ext):
-        """ Generate CMAKE build command and run it """
+        """ Generate CMAKE build commands and run them with Ninja """
         extdir = os.path.abspath(
             os.path.dirname(self.get_ext_fullpath(ext.name)))
+
+        # make sure .so is stored in  the correct directory
+        # path to the python interpreter
+        # generate ninja build file
         cmake_args = ['-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=' + extdir,
-                      '-DPYTHON_EXECUTABLE=' + sys.executable]
+                      '-DPYTHON_EXECUTABLE=' + sys.executable,
+                      '-GNinja']
 
         cfg = 'Debug' if self.debug else 'Release'
-        build_args = ['--config', cfg]
 
         if platform.system() == "Windows":
             cmake_args += ['-DCMAKE_LIBRARY_OUTPUT_DIRECTORY_{}={}'.format(
@@ -53,10 +62,8 @@ class CMakeBuild(build_ext):
                 extdir)]
             if sys.maxsize > 2**32:
                 cmake_args += ['-A', 'x64']
-            build_args += ['--', '/m']
         else:
             cmake_args += ['-DCMAKE_BUILD_TYPE=' + cfg]
-            build_args += ['--', '-j2']
 
         env = os.environ.copy()
         env['CXXFLAGS'] = '{} -DVERSION_INFO=\\"{}\\"'.format(
@@ -64,14 +71,13 @@ class CMakeBuild(build_ext):
             self.distribution.get_version())
 
         # build to build, not self.build_temp=build/temp.macosx-10.7-x86_64-3.7
-        build_dir = "build"
+        build_dir = os.path.join(ext.sourcedir, "build")
         if not os.path.exists(build_dir):
             os.makedirs(build_dir)
 
         subprocess.check_call(['cmake', ext.sourcedir] + cmake_args,
                               cwd=build_dir, env=env)
-        subprocess.check_call(['cmake', '--build', '.'] + build_args,
-                              cwd=build_dir)
+        subprocess.check_call(['ninja'], cwd=build_dir)
 
         # Copy *_test file to tests directory
         test_bin = os.path.join(build_dir, 'MonteCarlo_test')
