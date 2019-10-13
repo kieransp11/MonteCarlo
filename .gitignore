@@ -1,0 +1,14 @@
+build/
+tests/bin/
+.vscode/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# setuptools auto generate
+*.egg-info/
