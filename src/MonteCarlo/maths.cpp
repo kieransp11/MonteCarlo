@@ -1,5 +1,4 @@
 #include "maths.h"
-#include <iostream>
 
 int add(int i, int j)
 {
