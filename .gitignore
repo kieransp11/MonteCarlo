@@ -1,6 +1,7 @@
 build/
 tests/bin/
 .vscode/
+src/MonteCarlo/.src/temp/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
