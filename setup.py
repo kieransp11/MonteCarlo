@@ -71,9 +71,9 @@ class CMakeBuild(build_ext):
 
     def copy_test_file(self, src_file):
         """
-        Copy 'src_file' to 'tests/bin' directory, ensuring parent directory 
+        Copy 'src_file' to 'tests/bin' directory, ensuring parent directory
         exists. Messages like 'creating directory /path/to/package' and
-        'copying directory /src/path/to/package -> path/to/package' are 
+        'copying directory /src/path/to/package -> path/to/package' are
         displayed on standard output. Adapted from scikit-build.
         The original file in the build directory is not moved/deleted.
         """
@@ -91,8 +91,42 @@ class CMakeBuild(build_ext):
         copymode(src_file, dest_file)
 
 
+def produce_cmake_files(path_to_template, include_sections, output_dir):
+    sections = []
+    include = True
+    lines = []
+    with open(path_to_template, "r") as f:
+        for line in f:
+            begin_name = re.search(
+                r"<begin_section>(.*)</begin_section>", line)
+            if begin_name:
+                sections.append(begin_name.group(1))
+                include = sections[-1] in include_sections
+
+            if include:
+                lines.append(line)
+
+            end_name = re.search(r"<end_section>(.*)</end_section>", line)
+            if end_name:
+                if sections.pop() == end_name.group(1):
+                    include = sections == [] or sections[-1] in include_sections
+                else:
+                    raise RuntimeError(
+                        "Tag scopes must be concentric or disjoint")
+
+    if not os.path.isdir(output_dir):
+        os.makedirs(output_dir)
+
+    with open(os.path.join(output_dir, "CMakeLists.txt"), "w") as f:
+        f.write(''.join(lines).strip())
+
+
 if __name__ == "__main__":
     MODE = sys.argv[1]
+
+    #produce_cmake_files("CMakeLists.txt", [
+    #                    "pybind11"], "src/MonteCarlo/.src")
+
     setup(
         name='MonteCarlo',
         version='0.1',
